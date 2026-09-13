@@ -6,8 +6,15 @@ class EmptyPdfError extends Error {}
 
 let pdfjsPromise = null;
 function loadPdfjs() {
-  // pdfjs-dist ships ESM only; load lazily from this CommonJS module.
-  if (!pdfjsPromise) pdfjsPromise = import('pdfjs-dist/legacy/build/pdf.mjs');
+  if (!pdfjsPromise) {
+    pdfjsPromise = (async () => {
+      try {
+        return require('pdfjs-dist/legacy/build/pdf.mjs');
+      } catch {
+        return import('pdfjs-dist/legacy/build/pdf.mjs');
+      }
+    })();
+  }
   return pdfjsPromise;
 }
 

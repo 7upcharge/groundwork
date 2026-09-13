@@ -12,7 +12,11 @@ function documentRoutes({ db, llm, recorder, storage, maxUploadBytes, maxPages }
     limits: { fileSize: maxUploadBytes, files: 1 },
     fileFilter: (req, file, cb) => {
       const looksLikePdf =
-        file.mimetype === 'application/pdf' || (file.mimetype === 'application/octet-stream' && /\.pdf$/i.test(file.originalname));
+        /\.pdf$/i.test(file.originalname) ||
+        file.mimetype === 'application/pdf' ||
+        file.mimetype === 'application/x-pdf' ||
+        file.mimetype === 'application/acrobat' ||
+        file.mimetype === 'application/octet-stream';
       cb(looksLikePdf ? null : new InvalidPdfError('Only PDF files are supported right now.'), looksLikePdf);
     },
   });

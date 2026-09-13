@@ -8,10 +8,19 @@ const crypto = require('crypto');
 // never be path-traversed to since the name is a hex digest we compute.
 function createStorage(dataDir) {
   const dir = path.join(dataDir, 'uploads');
-  fs.mkdirSync(dir, { recursive: true });
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch {
+    /* ignore */
+  }
 
   return {
     save(buffer) {
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch {
+        /* ignore */
+      }
       const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
       const key = `${sha256}.pdf`;
       const target = path.join(dir, key);
