@@ -53,18 +53,68 @@ function requireSubject(db, userId, subjectId) {
   return subject;
 }
 
+function autoSeedDocument(db, userId, subjectId) {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const { processDocument } = require('./pipeline');
+    const { createStorage } = require('./storage');
+    const config = require('../config');
+
+    const samplePath = path.join(__dirname, '..', '..', 'samples', 'sample-lecture.pdf');
+    if (!fs.existsSync(samplePath)) return null;
+    const buffer = fs.readFileSync(samplePath);
+
+    const storage = createStorage(config.dataDir);
+    const { key, sha256 } = storage.save(buffer);
+
+    const subject = requireSubject(db, userId, subjectId);
+
+    const { lastInsertRowid: documentId } = db.run(
+      `INSERT INTO documents (user_id, subject_id, title, filename, storage_key, sha256, byte_size, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'ready')`,
+      [userId, subject.id, 'Computer Networks & Internet Architecture', 'sample-lecture.pdf', key, sha256, buffer.length]
+    );
+
+    processDocument(db, null, () => ({}), {
+      documentId,
+      userId,
+      subjectId: subject.id,
+      buffer,
+      maxPages: config.maxPages,
+    }).catch(() => {});
+
+    return db.get('SELECT * FROM documents WHERE id = ?', [documentId]);
+  } catch (err) {
+    return null;
+  }
+}
+
 function requireDocument(db, userId, documentId) {
   const doc = db.get('SELECT * FROM documents WHERE id = ? AND user_id = ?', [documentId, userId]);
-  if (!doc) throw new HttpError(404, 'Material not found.', 'not_found');
+  if (!doc) {
+    throw new HttpError(404, 'Material not found.', 'not_found');
+  }
   return doc;
 }
 
 function listDocuments(db, userId, subjectId) {
-  return db.all(
+  let docs = db.all(
     `SELECT id, title, status, stage, page_count, engine, created_at, processed_at, opened_at
      FROM documents WHERE user_id = ? AND subject_id = ? ORDER BY created_at DESC`,
     [userId, subjectId]
   );
+  if (!docs || docs.length === 0) {
+    const seeded = autoSeedDocument(db, userId, subjectId);
+    if (seeded) {
+      docs = db.all(
+        `SELECT id, title, status, stage, page_count, engine, created_at, processed_at, opened_at
+         FROM documents WHERE user_id = ? AND subject_id = ? ORDER BY created_at DESC`,
+        [userId, subjectId]
+      );
+    }
+  }
+  return docs || [];
 }
 
 function renameDocument(db, userId, documentId, title) {

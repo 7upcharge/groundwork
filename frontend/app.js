@@ -659,7 +659,19 @@
   // ------------------------------------------------------------- document
   async function viewDocument(idStr) {
     const id = Number(idStr);
-    const doc = await api('GET', `/api/documents/${id}`);
+    let doc;
+    try {
+      doc = await api('GET', `/api/documents/${id}`);
+    } catch {
+      const { subjects } = await api('GET', '/api/subjects');
+      if (subjects.length > 0) {
+        const { documents } = await api('GET', `/api/subjects/${subjects[0].id}/documents`);
+        if (documents.length > 0) {
+          doc = await api('GET', `/api/documents/${documents[0].id}`);
+        }
+      }
+    }
+    if (!doc) throw new ApiError('Material not found.', 404);
 
     if (doc.status === 'failed') {
       mount(main, [
