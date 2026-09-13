@@ -20,9 +20,10 @@ module.exports = {
     timeoutMs: int(process.env.LLM_TIMEOUT_MS, 30000),
   },
   google: {
-    clientId: process.env.GOOGLE_CLIENT_ID || '',
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    clientId: (process.env.GOOGLE_CLIENT_ID || '').trim(),
+    clientSecret: (process.env.GOOGLE_CLIENT_SECRET || '').trim(),
   },
+
 
 };
 
