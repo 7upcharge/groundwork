@@ -19,7 +19,9 @@ function loadPdfjs() {
 }
 
 function isPdfMagicBytes(buffer) {
-  return buffer.length > 5 && buffer.subarray(0, 5).equals(PDF_MAGIC_BYTES);
+  if (!buffer || buffer.length < 5) return false;
+  const header = buffer.subarray(0, Math.min(buffer.length, 1024)).toString('latin1');
+  return header.includes('%PDF-');
 }
 
 function pageItemsToText(items) {
@@ -44,8 +46,10 @@ async function extractPages(buffer, { maxPages = 60 } = {}) {
   if (!isPdfMagicBytes(buffer)) throw new InvalidPdfError('This file is not a valid PDF.');
 
   const pdfjs = await loadPdfjs();
+  const uint8Data = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+
   const loadingTask = pdfjs.getDocument({
-    data: new Uint8Array(buffer),
+    data: uint8Data,
     isEvalSupported: false,
     disableFontFace: true,
     useSystemFonts: false,
@@ -55,9 +59,13 @@ async function extractPages(buffer, { maxPages = 60 } = {}) {
   let doc;
   try {
     doc = await loadingTask.promise;
-  } catch {
-    await loadingTask.destroy();
-    throw new InvalidPdfError('This PDF is damaged or password-protected, so it couldn’t be opened.');
+  } catch (err) {
+    await loadingTask.destroy().catch(() => {});
+    if (err && (err.name === 'PasswordException' || (err.message && err.message.toLowerCase().includes('password')))) {
+      throw new InvalidPdfError('This PDF is password-protected. Please upload an unprotected PDF.');
+    }
+    console.error('PDF.js parsing error details:', err);
+    throw new InvalidPdfError(err && err.message ? err.message : 'This PDF could not be opened.');
   }
 
   try {
