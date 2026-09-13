@@ -46,7 +46,7 @@ function createApp(overrides = {}) {
   app.use('/api', writeLimiter);
   app.use('/api/auth', authLimiter);
 
-  app.use('/api/auth', authRoutes({ auth, production: cfg.production }));
+  app.use('/api/auth', authRoutes({ auth, production: cfg.production, googleConfig: cfg.google }));
   app.use('/api/subjects', requireUser, subjectRoutes({ db }));
   app.use('/api/documents', requireUser, uploadLimiter, documentRoutes({ db, llm, recorder, storage, maxUploadBytes: cfg.maxUploadBytes, maxPages: cfg.maxPages }));
   app.use('/api/quizzes', requireUser, quizRoutes({ db, llm, recorder }));

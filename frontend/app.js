@@ -356,7 +356,11 @@
         ]),
       ]),
       h('div', { class: 'card max-w-sm' }, [
-        h('button', { class: 'btn full-btn', onClick: startGuest, text: 'Start studying →' }),
+        h('a', { class: 'btn google-btn', href: '/api/auth/google' }, [
+          h('span', { text: '🌐' }),
+          ' Continue with Google'
+        ]),
+        h('button', { class: 'btn full-btn secondary mb-2', onClick: startGuest, text: 'Start as Guest →' }),
         h('p', { class: 'auth-switch' }, [h('a', { href: '#/login', text: 'Sign in' }), ' or ', h('a', { href: '#/register', text: 'create an account' })]),
         errorEl,
       ]),
@@ -384,7 +388,12 @@
       'form',
       { class: 'card auth-card', onSubmit: handleSubmit },
       [
-        h('h2', { text: title, class: 'mb-4' }),
+        h('h2', { text: title, class: 'mb-3' }),
+        h('a', { class: 'btn google-btn', href: '/api/auth/google' }, [
+          h('span', { text: '🌐' }),
+          ' Continue with Google'
+        ]),
+        h('div', { class: 'auth-divider mb-3', text: '— OR —' }),
         ...fields.map((f) => {
           const input = h('input', { type: f.type, name: f.name, required: true, autocomplete: f.autocomplete });
           inputs[f.name] = input;

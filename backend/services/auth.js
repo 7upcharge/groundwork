@@ -95,7 +95,24 @@ function createAuthService(db, { sessionDays }) {
     db.run('DELETE FROM sessions WHERE expires_at <= ?', [new Date().toISOString()]);
   }
 
-  return { createSession, userForToken, destroySession, register, claimGuest, login, createGuest, getUser, purgeExpiredSessions };
+  async function loginOrRegisterGoogle({ email, name }) {
+    if (!email) throw new HttpError(400, 'Google account email is missing.', 'invalid_google_user');
+    let user = db.get('SELECT id, is_guest FROM users WHERE email = ?', [email]);
+    if (user) {
+      if (user.is_guest) {
+        db.run('UPDATE users SET is_guest = 0, name = ? WHERE id = ?', [name || 'Google User', user.id]);
+      }
+      return user.id;
+    }
+    const { lastInsertRowid } = db.run('INSERT INTO users (email, name, is_guest) VALUES (?, ?, 0)', [
+      email,
+      name || 'Google User',
+    ]);
+    return lastInsertRowid;
+  }
+
+  return { createSession, userForToken, destroySession, register, claimGuest, login, createGuest, getUser, purgeExpiredSessions, loginOrRegisterGoogle };
 }
+
 
 module.exports = { createAuthService, hashPassword, verifyPassword };

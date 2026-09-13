@@ -1,8 +1,8 @@
 const { Router } = require('express');
-const { handle, v } = require('../lib/http');
+const { handle, v, HttpError } = require('../lib/http');
 const { sessionCookie, clearCookie } = require('../middleware/security');
 
-function authRoutes({ auth, production }) {
+function authRoutes({ auth, production, googleConfig }) {
   const router = Router();
   const setSession = (res, userId) => {
     const { token, expires } = auth.createSession(userId);
@@ -16,6 +16,69 @@ function authRoutes({ auth, production }) {
       res.json({ user: req.user });
     })
   );
+
+  router.get('/google', (req, res) => {
+    if (!googleConfig || !googleConfig.clientId) {
+      return res.status(500).json({ error: 'Google OAuth is not configured.' });
+    }
+    const protocol = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
+
+    const authUrl =
+      'https://accounts.google.com/o/oauth2/v2/auth?' +
+      new URLSearchParams({
+        client_id: googleConfig.clientId,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: 'openid email profile',
+        prompt: 'select_account',
+      }).toString();
+
+    res.redirect(authUrl);
+  });
+
+  router.get(
+    '/google/callback',
+    handle(async (req, res) => {
+      const { code } = req.query;
+      if (!code) throw new HttpError(400, 'Authorization code missing.', 'missing_code');
+
+      const protocol = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
+
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: googleConfig.clientId,
+          client_secret: googleConfig.clientSecret,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code',
+        }).toString(),
+      });
+
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || !tokenData.access_token) {
+        throw new HttpError(400, tokenData.error_description || 'Failed to exchange code with Google.', 'oauth_error');
+      }
+
+      const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
+      const userData = await userRes.json();
+      if (!userRes.ok || !userData.email) {
+        throw new HttpError(400, 'Failed to fetch Google profile.', 'oauth_profile_error');
+      }
+
+      const userId = await auth.loginOrRegisterGoogle({ email: userData.email, name: userData.name });
+      setSession(res, userId);
+      res.redirect('/#/');
+    })
+  );
+
 
   router.post(
     '/guest',

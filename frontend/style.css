@@ -189,6 +189,15 @@ body.has-sidebar .topnav nav { display: none; }
 .btn.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
 .btn.danger:hover { background: var(--danger-soft); }
 .btn.small { padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; }
+.btn.google-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--border-strong);
+  font-weight: 600; text-decoration: none; width: 100%; margin-bottom: 12px;
+}
+.btn.google-btn:hover { background: var(--surface-alt); border-color: var(--accent); color: var(--ink); }
+.auth-divider { text-align: center; font-size: 0.72rem; font-weight: 700; color: var(--faint); letter-spacing: 0.08em; }
+
+
 
 /* ═══════════════════════ PRIMITIVES ═══════════════════════ */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }

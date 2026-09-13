@@ -19,4 +19,10 @@ module.exports = {
     anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
     timeoutMs: int(process.env.LLM_TIMEOUT_MS, 30000),
   },
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+  },
+
 };
+
