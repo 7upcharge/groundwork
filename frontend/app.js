@@ -420,25 +420,35 @@
   }
 
   async function viewLogin() {
-    mount(
-      main,
-      authForm({
-        title: 'Sign in',
-        fields: [
-          { name: 'email', label: 'Email', type: 'email', autocomplete: 'email' },
-          { name: 'password', label: 'Password', type: 'password', autocomplete: 'current-password' },
-        ],
-        submitLabel: 'Sign in',
-        switchTo: h('p', { class: 'auth-switch' }, [h('a', { href: '#/register', text: 'Create an account instead' })]),
-        onSubmit: async (v) => {
-          const r = await api('POST', '/api/auth/login', v);
-          state.user = r.user;
-          location.hash = '#/';
-          renderChrome();
-          route();
-        },
-      })
-    );
+    const searchParams = new URLSearchParams(location.search || (location.hash.includes('?') ? location.hash.split('?')[1] : ''));
+    const oauthError = searchParams.get('error');
+
+    const form = authForm({
+      title: 'Sign in',
+      fields: [
+        { name: 'email', label: 'Email', type: 'email', autocomplete: 'email' },
+        { name: 'password', label: 'Password', type: 'password', autocomplete: 'current-password' },
+      ],
+      submitLabel: 'Sign in',
+      switchTo: h('p', { class: 'auth-switch' }, [h('a', { href: '#/register', text: 'Create an account instead' })]),
+      onSubmit: async (v) => {
+        const r = await api('POST', '/api/auth/login', v);
+        state.user = r.user;
+        location.hash = '#/';
+        renderChrome();
+        route();
+      },
+    });
+
+    if (oauthError) {
+      const errEl = form.querySelector('.error-text');
+      if (errEl) {
+        errEl.textContent = oauthError;
+        errEl.classList.remove('hidden');
+      }
+    }
+
+    mount(main, form);
   }
 
   async function viewRegister() {

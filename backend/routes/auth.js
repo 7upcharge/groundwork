@@ -17,13 +17,21 @@ function authRoutes({ auth, production, googleConfig }) {
     })
   );
 
+  const getRedirectUri = (req) => {
+    const rawProto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const protocol = rawProto.toLowerCase().includes('https') ? 'https' : 'http';
+
+    const rawHost = req.headers['x-forwarded-host'] || req.headers.host || '';
+    const host = rawHost.split(',')[0].trim();
+
+    return `${protocol}://${host}/api/auth/google/callback`;
+  };
+
   router.get('/google', (req, res) => {
     if (!googleConfig || !googleConfig.clientId) {
       return res.status(500).json({ error: 'Google OAuth is not configured.' });
     }
-    const protocol = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-    const host = req.headers['x-forwarded-host'] || req.headers.host;
-    const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
+    const redirectUri = getRedirectUri(req);
 
     const authUrl =
       'https://accounts.google.com/o/oauth2/v2/auth?' +
@@ -38,15 +46,13 @@ function authRoutes({ auth, production, googleConfig }) {
     res.redirect(authUrl);
   });
 
-  router.get(
-    '/google/callback',
-    handle(async (req, res) => {
-      const { code } = req.query;
-      if (!code) throw new HttpError(400, 'Authorization code missing.', 'missing_code');
+  router.get('/google/callback', async (req, res) => {
+    try {
+      const { code, error } = req.query;
+      if (error) throw new Error(`Google login error: ${error}`);
+      if (!code) throw new Error('Authorization code missing.');
 
-      const protocol = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-      const host = req.headers['x-forwarded-host'] || req.headers.host;
-      const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
+      const redirectUri = getRedirectUri(req);
 
       const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
@@ -62,7 +68,7 @@ function authRoutes({ auth, production, googleConfig }) {
 
       const tokenData = await tokenRes.json();
       if (!tokenRes.ok || !tokenData.access_token) {
-        throw new HttpError(400, tokenData.error_description || 'Failed to exchange code with Google.', 'oauth_error');
+        throw new Error(tokenData.error_description || tokenData.error || 'Failed to exchange code with Google.');
       }
 
       const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -70,14 +76,18 @@ function authRoutes({ auth, production, googleConfig }) {
       });
       const userData = await userRes.json();
       if (!userRes.ok || !userData.email) {
-        throw new HttpError(400, 'Failed to fetch Google profile.', 'oauth_profile_error');
+        throw new Error('Failed to fetch user profile from Google.');
       }
 
       const userId = await auth.loginOrRegisterGoogle({ email: userData.email, name: userData.name });
       setSession(res, userId);
       res.redirect('/#/');
-    })
-  );
+    } catch (err) {
+      console.error('Google OAuth error:', err.message);
+      res.redirect(`/#/login?error=${encodeURIComponent(err.message)}`);
+    }
+  });
+
 
 
   router.post(
