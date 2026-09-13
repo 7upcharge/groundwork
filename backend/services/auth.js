@@ -4,6 +4,8 @@ const { HttpError } = require('../lib/http');
 
 const scrypt = promisify(crypto.scrypt);
 const KEY_LEN = 64;
+const SESSION_SECRET = process.env.SESSION_SECRET || 'groundwork-stateless-session-secret-key-3d751fc8';
+
 
 async function hashPassword(password) {
   const salt = crypto.randomBytes(16);
@@ -22,26 +24,112 @@ async function verifyPassword(password, stored) {
 
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
+function signToken(data) {
+  const payload = Buffer.from(JSON.stringify(data)).toString('base64url');
+  const hmac = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
+  return `${payload}.${hmac}`;
+}
+
+function verifyToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [payload, sig] = parts;
+  const expectedHmac = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
+  if (sig !== expectedHmac) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (data.exp && Date.now() > data.exp) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 function createAuthService(db, { sessionDays }) {
   function createSession(userId) {
-    const token = crypto.randomBytes(32).toString('base64url');
-    const expires = new Date(Date.now() + sessionDays * 86400_000).toISOString();
-    db.run('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', [hashToken(token), userId, expires]);
+    const user = getUser(userId);
+    const expiresMs = Date.now() + sessionDays * 86400_000;
+    const expires = new Date(expiresMs).toISOString();
+
+    const tokenData = {
+      id: userId,
+      email: user ? user.email : null,
+      name: user ? user.name : 'User',
+      isGuest: user ? !!user.isGuest : false,
+      exp: expiresMs,
+    };
+    const token = signToken(tokenData);
+
+    try {
+      db.run('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', [hashToken(token), userId, expires]);
+    } catch {
+      /* ignore db insert errors in serverless */
+    }
     return { token, expires };
   }
 
   function userForToken(token) {
     if (!token) return null;
-    const row = db.get(
-      `SELECT u.id, u.email, u.name, u.is_guest FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.token_hash = ? AND s.expires_at > ?`,
-      [hashToken(token), new Date().toISOString()]
-    );
-    return row ? { id: row.id, email: row.email, name: row.name, isGuest: !!row.is_guest } : null;
+    const verified = verifyToken(token);
+    if (!verified) return null;
+
+    try {
+      const revoked = db.get("SELECT 1 FROM sessions WHERE token_hash = ? AND expires_at = 'REVOKED'", [hashToken(token)]);
+      if (revoked) return null;
+    } catch {
+      /* ignore */
+    }
+
+    // Check local database instance
+    const dbUser = db.get('SELECT id, email, name, is_guest FROM users WHERE id = ?', [verified.id]);
+    if (dbUser) {
+      return { id: dbUser.id, email: dbUser.email, name: dbUser.name, isGuest: !!dbUser.is_guest };
+    }
+
+    // Serverless fallback: ensure user row exists in current local DB instance
+    try {
+      if (verified.email) {
+        db.run('INSERT OR IGNORE INTO users (id, email, name, is_guest) VALUES (?, ?, ?, ?)', [
+          verified.id,
+          verified.email,
+          verified.name,
+          verified.isGuest ? 1 : 0,
+        ]);
+      } else {
+        db.run('INSERT OR IGNORE INTO users (id, name, is_guest) VALUES (?, ?, ?)', [
+          verified.id,
+          verified.name || 'Guest',
+          verified.isGuest ? 1 : 0,
+        ]);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    return {
+      id: verified.id,
+      email: verified.email || null,
+      name: verified.name || 'User',
+      isGuest: !!verified.isGuest,
+    };
   }
 
   function destroySession(token) {
-    if (token) db.run('DELETE FROM sessions WHERE token_hash = ?', [hashToken(token)]);
+    if (token) {
+      try {
+        const verified = verifyToken(token);
+        const userId = (verified && verified.id) || 1;
+        db.run('DELETE FROM sessions WHERE token_hash = ?', [hashToken(token)]);
+        db.run('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', [
+          hashToken(token),
+          userId,
+          'REVOKED',
+        ]);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   async function register({ email, password, name }) {
