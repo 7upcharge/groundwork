@@ -17,6 +17,7 @@ const { subjectRoutes } = require('./routes/subjects');
 const { documentRoutes } = require('./routes/documents');
 const { quizRoutes } = require('./routes/quizzes');
 const { conceptRoutes } = require('./routes/concepts');
+const { tutorRoutes } = require('./routes/tutor');
 const { dashboardRoutes, exportRoutes } = require('./routes/dashboard');
 
 function createApp(overrides = {}) {
@@ -50,8 +51,10 @@ function createApp(overrides = {}) {
   app.use('/api/documents', requireUser, uploadLimiter, documentRoutes({ db, llm, recorder, storage, maxUploadBytes: cfg.maxUploadBytes, maxPages: cfg.maxPages }));
   app.use('/api/quizzes', requireUser, quizRoutes({ db, llm, recorder }));
   app.use('/api/concepts', requireUser, conceptRoutes({ db }));
+  app.use('/api/tutor', requireUser, tutorRoutes({ db }));
   app.use('/api/dashboard', requireUser, dashboardRoutes({ db }));
   app.use('/api/export', requireUser, exportRoutes({ db }));
+
 
   app.get('/api/status', (req, res) => res.json({ status: 'ok', llmEnabled: !!llm, model: llm?.model || null }));
   app.get('/sample-lecture.pdf', (req, res) => res.sendFile(path.join(__dirname, '..', 'samples', 'sample-lecture.pdf')));

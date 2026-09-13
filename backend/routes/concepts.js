@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { handle, v } = require('../lib/http');
-const { getConceptDetail } = require('../services/concepts');
+const { getConceptDetail, getSubjectMindMap } = require('../services/concepts');
 const { weakConcepts } = require('../services/weakness');
 const lib = require('../services/library');
 
@@ -10,6 +10,14 @@ function conceptRoutes({ db }) {
   router.get(
     '/:id',
     handle(async (req, res) => res.json(getConceptDetail(db, req.user.id, v.id(req.params.id))))
+  );
+
+  router.get(
+    '/subject/:subjectId/graph',
+    handle(async (req, res) => {
+      const subjectId = v.id(req.params.subjectId);
+      res.json(getSubjectMindMap(db, req.user.id, subjectId));
+    })
   );
 
   router.get(
@@ -25,3 +33,4 @@ function conceptRoutes({ db }) {
 }
 
 module.exports = { conceptRoutes };
+

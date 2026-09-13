@@ -1,0 +1,19 @@
+{
+  "name": "groundwork",
+  "version": "1.0.0",
+  "description": "A source-grounded study workspace: upload a lecture PDF and get revision notes, a practice quiz, and a knowledge graph.",
+  "private": true,
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "test": "cd backend && npm test"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^2.3.0",
+    "pdfjs-dist": "^6.3.289"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

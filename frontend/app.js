@@ -29,6 +29,77 @@
   };
   const fmtDate = (iso) => (iso ? new Date(iso.replace(' ', 'T') + 'Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 
+  // -------------------------------------------------------- Grounded Tutor Drawer
+  function openTutorDrawer(params = {}) {
+    const { query = '', conceptId = null, documentId = null, subjectId = null, mode = 'explain', contextText = null } = params;
+    let drawer = document.getElementById('tutor-drawer');
+    if (!drawer) {
+      drawer = h('div', { id: 'tutor-drawer', class: 'tutor-drawer' });
+      document.body.appendChild(drawer);
+    }
+    drawer.classList.add('open');
+
+    const queryInput = h('input', { type: 'text', class: 'tutor-input', value: query || '', placeholder: 'Ask Groundwork about your material...' });
+    const responseBox = h('div', { class: 'tutor-response-box' });
+    const statusEl = h('div', { class: 'stage-line hidden' }, [h('span', { class: 'spinner' }), 'Searching course material…']);
+
+    const closeBtn = h('button', { class: 'btn secondary small', text: '✕ Close', onClick: () => drawer.classList.remove('open') });
+    const sendBtn = h('button', { class: 'btn small', text: 'Ask', onClick: () => runQuery('explain') });
+
+    const explainBtn = h('button', { class: 'btn secondary small', text: 'Explain', onClick: () => runQuery('explain') });
+    const simpleBtn = h('button', { class: 'btn secondary small', text: 'Simpler', onClick: () => runQuery('explain_simple') });
+    const examBtn = h('button', { class: 'btn secondary small', text: 'Exam Answer', onClick: () => runQuery('exam_answer') });
+
+    mount(drawer, [
+      h('div', { class: 'tutor-header' }, [
+        h('div', {}, [
+          h('h3', { text: 'Groundwork Grounded Tutor' }),
+          h('span', { class: 'tutor-badge', text: 'Source Verified' }),
+        ]),
+        closeBtn,
+      ]),
+      contextText ? h('div', { class: 'tutor-context-banner' }, [h('strong', { text: 'Context: ' }), contextText.slice(0, 140) + (contextText.length > 140 ? '…' : '')]) : null,
+      h('div', { class: 'tutor-body' }, [
+        h('div', { class: 'row-gap mb-2' }, [queryInput, sendBtn]),
+        h('div', { class: 'tutor-modes mb-3' }, [explainBtn, simpleBtn, examBtn]),
+        statusEl,
+        responseBox,
+      ]),
+    ]);
+
+    runQuery(mode);
+
+    async function runQuery(m) {
+      statusEl.classList.remove('hidden');
+      clear(responseBox);
+      try {
+        const res = await api('POST', '/api/tutor/ask', {
+          subjectId,
+          documentId,
+          conceptId,
+          query: queryInput.value.trim() || query,
+          mode: m,
+          contextText,
+        });
+        statusEl.classList.add('hidden');
+
+        const citations = res.sources || [];
+        mount(responseBox, [
+          h('div', { class: 'tutor-answer' }, res.answer),
+          citations.length
+            ? h('div', { class: 'tutor-citations mt-4' }, [
+                h('h4', { text: 'Grounding Citations', class: 'eyebrow mb-2' }),
+                ...citations.map((c, i) => sourceReveal(c, `tutor-src-${i}`)),
+              ])
+            : null,
+        ]);
+      } catch (err) {
+        statusEl.classList.add('hidden');
+        mount(responseBox, h('div', { class: 'banner error' }, err.message || 'Could not fetch explanation.'));
+      }
+    }
+  }
+
   // ------------------------------------------------------------------ API
   class ApiError extends Error {
     constructor(message, status, code) { super(message); this.status = status; this.code = code; }
@@ -64,25 +135,135 @@
   const topnav = document.getElementById('topnav');
   const navEl = document.getElementById('primary-nav');
   const userBox = document.getElementById('user-box');
+  const sidebar = document.getElementById('sidebar');
+  const sidebarNav = document.getElementById('sidebar-nav');
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+
+  // Sidebar toggle
+  sidebarToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    document.body.classList.toggle('sidebar-collapsed');
+  });
+
+  // Theme Manager (Light / Dark mode)
+  const themeToggle = document.getElementById('theme-toggle');
+  const themeIcon = document.getElementById('theme-icon');
+  const themeLabel = document.getElementById('theme-label');
+
+  function getTheme() {
+    return document.documentElement.getAttribute('data-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('groundwork_theme', theme);
+    if (themeIcon && themeLabel) {
+      themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
+      themeLabel.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+    }
+    document.querySelectorAll('.theme-toggle-btn').forEach((btn) => {
+      btn.textContent = theme === 'dark' ? '☀️ Light mode' : '🌙 Dark mode';
+    });
+  }
+
+  function initTheme() {
+    const saved = localStorage.getItem('groundwork_theme');
+    if (saved) {
+      applyTheme(saved);
+    } else {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      applyTheme(prefersDark ? 'dark' : 'light');
+    }
+  }
+
+  function toggleTheme() {
+    const current = getTheme();
+    const next = current === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+  }
+
+  if (themeToggle) {
+    themeToggle.addEventListener('click', toggleTheme);
+  }
+  initTheme();
+
 
   function setActiveNav() {
     const hash = location.hash || '#/';
     navEl.querySelectorAll('a').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === hash));
+    sidebarNav.querySelectorAll('a').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === hash));
+  }
+
+  async function renderSidebar() {
+    if (!state.user) { sidebar.hidden = true; document.body.classList.remove('has-sidebar'); return; }
+    sidebar.hidden = false;
+    document.body.classList.add('has-sidebar');
+
+    const navItems = [
+      { icon: '⌂', label: 'Dashboard', href: '#/' },
+      { icon: '▣', label: 'Materials', href: '#/materials' },
+      { icon: '◎', label: 'Mind Map', href: '#/graph' },
+      { icon: '✦', label: 'Tutor', action: () => openTutorDrawer({}) },
+    ];
+
+    const elements = [];
+    for (const item of navItems) {
+      if (item.href) {
+        elements.push(h('a', { href: item.href }, [
+          h('span', { class: 'sb-icon', text: item.icon }),
+          h('span', { class: 'sb-label', text: item.label }),
+        ]));
+      } else {
+        elements.push(h('button', { onClick: item.action }, [
+          h('span', { class: 'sb-icon', text: item.icon }),
+          h('span', { class: 'sb-label', text: item.label }),
+        ]));
+      }
+    }
+
+    elements.push(h('div', { class: 'sb-divider' }));
+
+    // Load subjects for sidebar
+    try {
+      const { subjects } = await api('GET', '/api/subjects');
+      if (subjects && subjects.length > 0) {
+        elements.push(h('div', { class: 'sb-section-label', text: 'COURSES' }));
+        for (const s of subjects.slice(0, 5)) {
+          elements.push(h('a', { href: `#/subjects/${s.id}` }, [
+            h('span', { class: 'sb-icon', text: '·' }),
+            h('span', { class: 'sb-label', text: s.name }),
+          ]));
+        }
+      }
+    } catch { /* ignore */ }
+
+    elements.push(h('div', { class: 'sb-divider' }));
+    elements.push(h('a', { href: '#/materials' }, [
+      h('span', { class: 'sb-icon', text: '+' }),
+      h('span', { class: 'sb-label', text: 'Add material' }),
+    ]));
+
+    mount(sidebarNav, elements);
+    setActiveNav();
   }
 
   function renderChrome() {
-    if (!state.user) { topnav.hidden = true; return; }
+    if (!state.user) { topnav.hidden = true; sidebar.hidden = true; document.body.classList.remove('has-sidebar'); return; }
     topnav.hidden = false;
     mount(navEl, [
       h('a', { href: '#/', text: 'Dashboard' }),
       h('a', { href: '#/materials', text: 'Materials' }),
+      h('a', { href: '#/graph', text: 'Mind Map' }),
     ]);
     setActiveNav();
+    const theme = getTheme();
     mount(userBox, [
+      h('button', { class: 'theme-toggle-btn', onClick: toggleTheme, title: 'Switch light/dark theme' }, theme === 'dark' ? '☀️ Light mode' : '🌙 Dark mode'),
       h('span', { text: state.user.isGuest ? 'Guest' : state.user.name }),
       state.user.isGuest ? h('a', { href: '#/register', class: 'btn small secondary', text: 'Save account' }) : null,
       h('button', { class: 'btn small secondary', onClick: onLogout, text: 'Sign out' }),
     ]);
+    renderSidebar();
   }
 
   async function onLogout() {
@@ -104,6 +285,8 @@
     { pattern: /^#\/login$/, view: viewLogin },
     { pattern: /^#\/register$/, view: viewRegister },
     { pattern: /^#\/materials$/, view: viewMaterials },
+    { pattern: /^#\/graph$/, view: viewMindMap },
+    { pattern: /^#\/subjects\/(\d+)\/graph$/, view: viewMindMap },
     { pattern: /^#\/subjects\/(\d+)$/, view: viewSubject },
     { pattern: /^#\/documents\/(\d+)$/, view: viewDocument },
     { pattern: /^#\/quizzes\/(\d+)$/, view: viewQuiz },
@@ -128,6 +311,7 @@
         } catch (err) {
           renderError(err);
         }
+        setActiveNav();
         focusMain();
         return;
       }
@@ -135,6 +319,7 @@
     mount(main, emptyState('Page not found', "That page doesn't exist.", h('a', { href: '#/', class: 'btn', text: 'Go home' })));
   }
   window.addEventListener('hashchange', route);
+
 
   function renderError(err) {
     mount(main, [
@@ -150,18 +335,33 @@
   // --------------------------------------------------------------- landing
   function renderLanding() {
     topnav.hidden = true;
+    sidebar.hidden = true;
+    document.body.classList.remove('has-sidebar');
     const errorEl = h('p', { class: 'error-text hidden' });
+    const theme = getTheme();
     mount(main, [
+      h('div', { class: 'theme-bar' }, [
+        h('button', { class: 'theme-toggle-btn', onClick: toggleTheme, title: 'Switch light/dark theme' }, theme === 'dark' ? '☀️ Light mode' : '🌙 Dark mode'),
+      ]),
       h('section', { class: 'hero' }, [
+        h('div', { class: 'eyebrow mb-3', text: 'SOURCE-GROUNDED STUDY WORKSPACE' }),
         h('h1', { text: 'Your lecture, organized.' }),
-        h('p', { text: 'Upload a lecture PDF. Groundwork turns it into revision notes and a practice quiz, with every claim traceable back to the exact page it came from.' }),
+        h('p', { text: 'Upload a lecture PDF. Groundwork extracts revision notes, practice quizzes, and a concept knowledge map — with every claim traceable back to the exact page it came from.' }),
+        h('div', { class: 'row-gap mt-4' }, [
+          h('span', { class: 'pill ready', text: '📝 Notes' }),
+          h('span', { class: 'pill ready', text: '🧠 Quizzes' }),
+          h('span', { class: 'pill ready', text: '◎ Mind Map' }),
+          h('span', { class: 'pill ready', text: '✦ AI Tutor' }),
+          h('span', { class: 'pill ready', text: '🎯 Weakness Detection' }),
+        ]),
       ]),
       h('div', { class: 'card max-w-sm' }, [
-        h('button', { class: 'btn full-btn', onClick: startGuest, text: 'Continue as guest' }),
+        h('button', { class: 'btn full-btn', onClick: startGuest, text: 'Start studying →' }),
         h('p', { class: 'auth-switch' }, [h('a', { href: '#/login', text: 'Sign in' }), ' or ', h('a', { href: '#/register', text: 'create an account' })]),
         errorEl,
       ]),
     ]);
+
     async function startGuest() {
       try {
         const r = await api('POST', '/api/auth/guest');
@@ -259,30 +459,86 @@
   // -------------------------------------------------------------- dashboard
   async function viewDashboard() {
     const data = await api('GET', '/api/dashboard');
-    const blocks = [h('h1', { text: `Welcome back${state.user.isGuest ? '' : ', ' + state.user.name}`, class: 'mb-5' })];
 
-    if (data.nextUp) {
-      blocks.push(
-        h('div', { class: 'card next-up mb-6' }, [
-          h('div', {}, [
-            h('div', { class: 'label', text: 'Next up' }),
-            h('h2', {}, h('a', { href: `#/concepts/${data.nextUp.conceptId}`, class: 'no-underline', text: data.nextUp.name })),
-            h('p', { class: 'reason', text: `${data.nextUp.subjectName} — you missed ${data.nextUp.wrong} of your last ${data.nextUp.total} questions on this.` }),
-          ]),
-          h('a', { href: `#/concepts/${data.nextUp.conceptId}`, class: 'btn', text: 'Review topic' }),
+    // Left column: primary content
+    const leftCol = [];
+
+    // Greeting
+    leftCol.push(h('h1', { text: `Welcome back${state.user.isGuest ? '' : ', ' + state.user.name}`, class: 'mb-5' }));
+
+    // Continue studying section
+    if (data.subjects.length > 0) {
+      leftCol.push(h('div', { class: 'eyebrow mb-2', text: 'CONTINUE STUDYING' }));
+      leftCol.push(subjectGrid(data.subjects));
+      leftCol.push(h('a', { href: '#/materials', class: 'btn ghost mt-2', text: '+ Add more material' }));
+    } else {
+      leftCol.push(
+        h('div', { class: 'card mb-6' }, [
+          h('div', { class: 'eyebrow mb-2', text: 'GET STARTED' }),
+          h('h2', { class: 'mb-2', text: 'Upload your first lecture' }),
+          h('p', { class: 'text-muted mb-4', text: 'Drop a lecture PDF and Groundwork will extract verified revision notes, practice quizzes, and a concept knowledge map.' }),
+          h('a', { href: '#/materials', class: 'btn', text: 'Add material →' }),
         ])
       );
     }
 
-    blocks.push(h('h2', { text: 'Subjects', class: 'section-title mb-3' }));
-    if (data.subjects.length === 0) {
-      blocks.push(emptyState('No materials yet', 'Add a subject and upload your first lecture PDF.', h('a', { href: '#/materials', class: 'btn', text: 'Add material' })));
-    } else {
-      blocks.push(subjectGrid(data.subjects));
-      blocks.push(h('a', { href: '#/materials', class: 'btn ghost', text: '+ Add more material' }));
+    // Right column: focus & progress
+    const rightCol = [];
+
+    if (data.nextUp) {
+      rightCol.push(
+        h('div', { class: 'card mb-4' }, [
+          h('div', { class: 'eyebrow mb-2', text: 'FOCUS NEXT' }),
+          h('h3', { class: 'mb-2' }, h('a', { href: `#/concepts/${data.nextUp.conceptId}`, class: 'no-underline', text: data.nextUp.name })),
+          h('p', { class: 'text-muted text-small mb-3', text: `${data.nextUp.subjectName} — missed ${data.nextUp.wrong} of ${data.nextUp.total} questions` }),
+          h('div', { class: 'row-gap' }, [
+            h('a', { href: `#/concepts/${data.nextUp.conceptId}`, class: 'btn small', text: '⚡ Explain' }),
+            h('button', {
+              class: 'btn small secondary',
+              text: '🎯 Practice',
+              onClick: async () => {
+                try {
+                  const quiz = await api('POST', '/api/quizzes/targeted', { subjectId: data.nextUp.subjectId, conceptIds: [data.nextUp.conceptId] });
+                  location.hash = `#/quizzes/${quiz.id}`;
+                } catch { /* ignore */ }
+              },
+            }),
+          ]),
+        ])
+      );
+    } else if (data.subjects.length > 0) {
+      rightCol.push(
+        h('div', { class: 'card mb-4' }, [
+          h('div', { class: 'eyebrow mb-2', text: 'YOUR NEXT STEP' }),
+          h('p', { class: 'text-muted text-small mb-3', text: 'Take your first practice quiz to discover what needs attention.' }),
+          data.subjects[0] ? h('a', { href: `#/subjects/${data.subjects[0].id}`, class: 'btn small', text: 'Open material →' }) : null,
+        ])
+      );
     }
-    mount(main, blocks);
+
+    // Quick actions card
+    rightCol.push(
+      h('div', { class: 'card mb-4' }, [
+        h('div', { class: 'eyebrow mb-3', text: 'QUICK ACTIONS' }),
+        h('div', { class: 'row-gap flex-column' }, [
+          h('a', { href: '#/graph', class: 'btn secondary full-btn small', text: '◎ Knowledge Map' }),
+          h('button', { class: 'btn secondary full-btn small', text: '✦ Ask Groundwork', onClick: () => openTutorDrawer({}) }),
+        ]),
+      ])
+    );
+
+    if (data.subjects.length > 0) {
+      mount(main, [
+        h('div', { class: 'dashboard-grid' }, [
+          h('div', {}, leftCol),
+          h('div', {}, rightCol),
+        ]),
+      ]);
+    } else {
+      mount(main, leftCol);
+    }
   }
+
 
   function subjectGrid(subjects) {
     return h(
@@ -394,31 +650,76 @@
       return;
     }
 
-    const notesPanel = h('div', { id: 'panel-notes' });
+    const summaryPanel = h('div', { id: 'panel-summary' });
+    const notesPanel = h('div', { id: 'panel-notes', hidden: true });
     const quizPanel = h('div', { id: 'panel-quiz', hidden: true });
-    const tabNotes = h('button', { class: 'tab active', type: 'button', text: 'Notes', onClick: () => selectTab('notes') });
-    const tabQuiz = h('button', { class: 'tab', type: 'button', text: 'Quiz', onClick: () => selectTab('quiz') });
+
+    const tabSummary = h('button', { class: 'tab active', type: 'button', text: 'One-Glance Summary', onClick: () => selectTab('summary') });
+    const tabNotes = h('button', { class: 'tab', type: 'button', text: 'Revision Notes', onClick: () => selectTab('notes') });
+    const tabQuiz = h('button', { class: 'tab', type: 'button', text: 'Practice Quiz', onClick: () => selectTab('quiz') });
 
     function selectTab(name) {
+      tabSummary.classList.toggle('active', name === 'summary');
       tabNotes.classList.toggle('active', name === 'notes');
       tabQuiz.classList.toggle('active', name === 'quiz');
+      summaryPanel.hidden = name !== 'summary';
       notesPanel.hidden = name !== 'notes';
       quizPanel.hidden = name !== 'quiz';
     }
 
+    renderSummary(summaryPanel, doc, selectTab);
     renderNotes(notesPanel, doc);
     renderQuizStarter(quizPanel, doc);
 
     mount(main, [
       h('div', { class: 'doc-header' }, [
         h('h1', { text: doc.title }),
-        h('a', { href: `/api/export/documents/${doc.id}/study-pack.md`, class: 'btn secondary small', text: 'Export study pack' }),
+        h('div', { class: 'row-gap' }, [
+          h('button', { class: 'btn small', text: '✦ Ask Groundwork', onClick: () => openTutorDrawer({ documentId: doc.id, subjectId: doc.subjectId }) }),
+          h('a', { href: `/api/export/documents/${doc.id}/study-pack.md`, class: 'btn secondary small', text: 'Export' }),
+        ]),
       ]),
-      h('div', { class: 'engine-note', text: doc.engine === 'offline' ? `Extracted directly from the PDF (offline engine) · ${doc.pageCount} page${doc.pageCount === 1 ? '' : 's'}` : `Generated with ${doc.engine}, verified against the PDF · ${doc.pageCount} page${doc.pageCount === 1 ? '' : 's'}` }),
-      h('div', { class: 'tabs' }, [tabNotes, tabQuiz]),
+      h('div', { class: 'engine-note', text: `${doc.pageCount} page${doc.pageCount === 1 ? '' : 's'} · ${doc.engine === 'offline' ? 'offline engine' : doc.engine} · verified against source` }),
+      h('div', { class: 'tabs' }, [tabSummary, tabNotes, tabQuiz]),
+      summaryPanel,
       notesPanel,
       quizPanel,
     ]);
+
+  }
+
+  function renderSummary(panel, doc, selectTab) {
+    const tldrItems = doc.notes && doc.notes.sections.overview ? doc.notes.sections.overview : [];
+    const totalNoteItems = doc.notes ? Object.values(doc.notes.sections).flat().length : 0;
+
+    mount(panel, [
+      h('div', { class: 'summary-card card mb-5' }, [
+        h('div', { class: 'eyebrow mb-2', text: 'One-Glance Executive Summary' }),
+        h('h2', { class: 'mb-3', text: doc.title }),
+        tldrItems.length
+          ? h('div', { class: 'tldr-box mb-4' }, tldrItems.map((it) => h('p', { class: 'text-lead', text: `• ${it.text}` })))
+          : h('p', { class: 'text-muted', text: 'Summary is preparing...' }),
+        h('div', { class: 'ready-stats mb-4' }, [
+          stat(doc.pageCount || 0, 'Pages'),
+          stat(doc.concepts ? doc.concepts.length : 0, 'Core Topics'),
+          stat(totalNoteItems, 'Verified Note Points'),
+        ]),
+        h('div', { class: 'row-gap' }, [
+          h('button', { class: 'btn', text: 'Read Revision Notes →', onClick: () => selectTab('notes') }),
+          h('button', { class: 'btn secondary', text: 'Start Practice Quiz →', onClick: () => selectTab('quiz') }),
+        ]),
+      ]),
+      doc.concepts && doc.concepts.length
+        ? h('div', { class: 'note-section' }, [
+            h('h2', { text: 'Key Concepts At A Glance' }),
+            h('div', { class: 'concept-chip-row' }, doc.concepts.map((c) => h('a', { href: `#/concepts/${c.id}`, class: 'concept-chip', text: c.name }))),
+          ])
+        : null,
+    ]);
+
+    function stat(n, label) {
+      return h('div', { class: 'stat' }, [h('b', { text: n }), h('span', { text: label })]);
+    }
   }
 
   function sourceReveal(source, key) {
@@ -451,9 +752,17 @@
           ...items.map((item, i) =>
             h('div', { class: 'note-item' }, [
               h('p', { class: 'text', text: item.text }),
-              sourceReveal(item.source, `${kind}-${i}`),
+              h('div', { class: 'row-gap' }, [
+                sourceReveal(item.source, `${kind}-${i}`),
+                h('button', {
+                  class: 'btn ghost small',
+                  text: '⚡ Explain this',
+                  onClick: () => openTutorDrawer({ query: item.text, documentId: doc.id, contextText: item.text }),
+                }),
+              ]),
             ])
           ),
+
         ])
       );
     });
@@ -531,10 +840,17 @@
       submitBtn.disabled = true;
       try {
         const result = await api('POST', `/api/quizzes/${id}/attempts`, { responses });
-        scoreEl.textContent = `Score: ${result.score} / ${result.total}`;
-        const byId = new Map(result.quiz.questions.map((q) => [q.id, q]));
-        const gradedById = new Map(result.graded.map((g) => [g.questionId, g.correct]));
-        fieldsets.forEach((f) => f.applyResult(byId.get(f.question.id), gradedById.get(f.question.id)));
+        scoreEl.textContent = `Score: ${result.score || 0} / ${result.total || 0}`;
+        const questionsList = (result && result.quiz && result.quiz.questions) || [];
+        const gradedList = (result && result.graded) || [];
+        const byId = new Map(questionsList.map((q) => [q.id, q]));
+        const gradedById = new Map(gradedList.map((g) => [g.questionId, g ? g.correct : false]));
+        fieldsets.forEach((f) => {
+          const q = byId.get(f.question.id) || f.question;
+          const isCorrect = gradedById.get(f.question.id) || false;
+          f.applyResult(q, isCorrect);
+        });
+
       } finally {
         submitBtn.disabled = false;
       }
@@ -565,21 +881,40 @@
         el.classList.add(correct ? 'correct' : 'incorrect');
         feedback.classList.remove('hidden');
         feedback.classList.add(correct ? 'correct-text' : 'incorrect-text');
-        const correctText = fullQuestion.correctIndexes.map((i) => fullQuestion.choices[i]).join(', ');
+        const qObj = fullQuestion || q;
+        const indexes = (qObj && qObj.correctIndexes) || [];
+        const choices = (qObj && qObj.choices) || [];
+        const correctText = indexes.map((i) => choices[i]).filter(Boolean).join(', ') || 'See explanation below';
         feedback.textContent = correct ? 'Correct!' : `Not quite — the answer is "${correctText}".`;
-        if (fullQuestion.explanation) el.appendChild(h('p', { class: 'text-muted text-small mt-2', text: fullQuestion.explanation }));
-        if (fullQuestion.source) el.appendChild(sourceReveal(fullQuestion.source, `q${fullQuestion.id}`));
+        if (qObj.explanation) el.appendChild(h('p', { class: 'text-muted text-small mt-2', text: qObj.explanation }));
+        if (qObj.source) el.appendChild(sourceReveal(qObj.source, `q${qObj.id}`));
+
+        el.appendChild(
+          h('button', {
+            class: 'btn secondary small mt-2',
+            text: '⚡ Explain why & ask Groundwork',
+            onClick: () =>
+              openTutorDrawer({
+                query: fullQuestion.prompt,
+                conceptId: fullQuestion.conceptId,
+                contextText: `Question: ${fullQuestion.prompt}. Correct Answer: ${correctText}.`,
+              }),
+          })
+        );
         inputs.forEach((inp) => (inp.disabled = true));
       },
     };
   }
 
+
   // ------------------------------------------------------------- concept
   async function viewConcept(idStr) {
     const id = Number(idStr);
     const c = await api('GET', `/api/concepts/${id}`);
-    const total = c.performance.total;
-    const pct = total ? Math.round((c.performance.correct / total) * 100) : null;
+    const perf = (c && c.performance) || { total: 0, correct: 0 };
+    const total = perf.total || 0;
+    const correct = perf.correct || 0;
+    const pct = total ? Math.round((correct / total) * 100) : null;
 
     const blocks = [h('h1', { text: c.name, class: 'mb-4' })];
 
@@ -594,11 +929,12 @@
         h('div', { class: 'card mb-5' }, [
           h('h2', { text: 'Your performance', class: 'section-title mb-2' }),
           perfBar,
-          h('p', { class: 'text-muted text-small', text: `${c.performance.correct} of ${total} correct` }),
+          h('p', { class: 'text-muted text-small', text: `${correct} of ${total} correct` }),
           h('button', { class: 'btn secondary small mt-2', text: 'Practice this topic', onClick: startTargeted }),
         ])
       );
     }
+
 
     blocks.push(h('h2', { text: 'Where this appears', class: 'section-title mb-2' }));
     blocks.push(h('div', { class: 'card divider-list mb-5' }, c.sources.map((s, i) => h('div', { class: 'pad-sm' }, sourceReveal(s, `s${i}`)))));
@@ -608,6 +944,21 @@
       blocks.push(h('div', { class: 'related-list' }, c.related.map((r) => h('a', { href: `#/concepts/${r.id}`, class: 'concept-chip', text: r.name }))));
     }
 
+    blocks.push(
+      h('div', { class: 'card mt-4' }, [
+        h('div', { class: 'eyebrow mb-3', text: 'STUDY ACTIONS' }),
+        h('div', { class: 'row-gap flex-column' }, [
+          h('button', {
+            class: 'btn full-btn',
+            text: '✦ Ask Groundwork about this',
+            onClick: () => openTutorDrawer({ conceptId: c.id, query: c.name, subjectId: c.subjectId }),
+          }),
+          h('button', { class: 'btn secondary full-btn', text: '🎯 Practice this topic', onClick: startTargeted }),
+          h('a', { href: `#/subjects/${c.subjectId}/graph`, class: 'btn ghost text-center', text: '◎ View on knowledge map' }),
+        ]),
+      ])
+    );
+
     mount(main, blocks);
 
     async function startTargeted() {
@@ -616,5 +967,197 @@
     }
   }
 
+
+  // ------------------------------------------------------------- mindmap
+  async function viewMindMap(subjectIdStr) {
+    let subjectId = subjectIdStr ? Number(subjectIdStr) : null;
+    const { subjects } = await api('GET', '/api/subjects');
+
+    if (!subjects || subjects.length === 0) {
+      mount(main, emptyState('No materials yet', 'Upload a lecture PDF first to build your course mind map.', h('a', { href: '#/materials', class: 'btn', text: 'Add material' })));
+      return;
+    }
+
+    if (!subjectId) subjectId = subjects[0].id;
+    const graph = await api('GET', `/api/concepts/subject/${subjectId}/graph`);
+
+    const selector = h(
+      'select',
+      {
+        class: 'subject-select',
+        onChange: (e) => {
+          location.hash = `#/subjects/${e.target.value}/graph`;
+        },
+      },
+      subjects.map((s) => h('option', { value: String(s.id), selected: s.id === subjectId, text: s.name }))
+    );
+
+    const detailPanel = h('div', { class: 'mindmap-detail card' }, [
+      h('h3', { text: 'Select a concept node' }),
+      h('p', { class: 'text-muted', text: 'Click any node on the map to see definitions, source citations, mastery status, and targeted practice.' }),
+    ]);
+
+    const canvasBox = h('div', { class: 'mindmap-canvas-box card' });
+
+    mount(main, [
+      h('div', { class: 'doc-header mb-4' }, [
+        h('div', {}, [
+          h('h1', { text: 'Course Knowledge Map' }),
+          h('p', { class: 'engine-note', text: 'Source-grounded concept network & performance map' }),
+        ]),
+        selector,
+      ]),
+      h('div', { class: 'mindmap-layout' }, [canvasBox, detailPanel]),
+    ]);
+
+    renderMindMapGraph(canvasBox, graph, (node) => renderNodeDetail(detailPanel, node, subjectId));
+
+    if (graph.nodes.length > 0) {
+      renderNodeDetail(detailPanel, graph.nodes[0], subjectId);
+    }
+  }
+
+  function renderMindMapGraph(container, graph, onSelect) {
+    const width = 640;
+    const height = 440;
+
+    if (!graph.nodes || graph.nodes.length === 0) {
+      mount(container, emptyState('No concepts extracted yet', 'Upload a lecture PDF to build your course knowledge graph.'));
+      return;
+    }
+
+    const numNodes = graph.nodes.length;
+    const cx = width / 2;
+    const cy = height / 2;
+    const rx = Math.min(width, height) * 0.38;
+
+    const nodePos = new Map();
+    graph.nodes.forEach((n, i) => {
+      const angle = (i / numNodes) * 2 * Math.PI - Math.PI / 2;
+      const x = cx + rx * Math.cos(angle);
+      const y = cy + rx * Math.sin(angle);
+      nodePos.set(n.id, { x, y });
+    });
+
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('class', 'mindmap-svg');
+
+    graph.edges.forEach((e) => {
+      const p1 = nodePos.get(e.srcId);
+      const p2 = nodePos.get(e.dstId);
+      if (p1 && p2) {
+        const line = document.createElementNS(svgNS, 'line');
+        line.setAttribute('x1', p1.x);
+        line.setAttribute('y1', p1.y);
+        line.setAttribute('x2', p2.x);
+        line.setAttribute('y2', p2.y);
+        line.setAttribute('class', 'mindmap-edge');
+        svg.appendChild(line);
+      }
+    });
+
+    // Build adjacency set for neighbor dimming
+    const adjacency = new Map();
+    graph.nodes.forEach(n => adjacency.set(n.id, new Set()));
+    graph.edges.forEach(e => {
+      if (adjacency.has(e.srcId)) adjacency.get(e.srcId).add(e.dstId);
+      if (adjacency.has(e.dstId)) adjacency.get(e.dstId).add(e.srcId);
+    });
+
+    const allNodeGs = [];
+    let activeG = null;
+    graph.nodes.forEach((n) => {
+      const pos = nodePos.get(n.id);
+      const g = document.createElementNS(svgNS, 'g');
+      g.setAttribute('class', `mindmap-node ${n.mastery}`);
+      g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
+      g._nodeId = n.id;
+
+      const circle = document.createElementNS(svgNS, 'circle');
+      circle.setAttribute('r', n.mastery === 'weak' ? '22' : '18');
+
+      const text = document.createElementNS(svgNS, 'text');
+      text.setAttribute('dy', '32');
+      text.setAttribute('text-anchor', 'middle');
+      text.textContent = n.name;
+
+      g.appendChild(circle);
+      g.appendChild(text);
+
+      g.addEventListener('click', () => {
+        if (activeG) activeG.classList.remove('selected');
+        g.classList.add('selected');
+        activeG = g;
+        // Dim non-connected nodes
+        const neighbors = adjacency.get(n.id) || new Set();
+        allNodeGs.forEach(ng => {
+          const isConnected = ng._nodeId === n.id || neighbors.has(ng._nodeId);
+          ng.classList.toggle('dimmed', !isConnected);
+        });
+        onSelect(n);
+      });
+
+      svg.appendChild(g);
+      allNodeGs.push(g);
+    });
+
+    mount(container, svg);
+  }
+
+
+  function renderNodeDetail(panel, node, subjectId) {
+    const masteryLabel =
+      node.mastery === 'weak'
+        ? 'NEEDS ANOTHER LOOK'
+        : node.mastery === 'mastered'
+        ? 'Mastered'
+        : node.mastery === 'developing'
+        ? 'Developing'
+        : 'Untested';
+
+    const masteryClass = `pill ${node.mastery === 'weak' ? 'failed' : node.mastery === 'mastered' ? 'ready' : 'processing'}`;
+
+    mount(panel, [
+      h('div', { class: 'eyebrow mb-1', text: 'Concept Detail' }),
+      h('h2', { text: node.name, class: 'mb-2' }),
+      h('div', { class: 'mb-4' }, [h('span', { class: masteryClass, text: masteryLabel })]),
+
+      node.definition
+        ? h('div', { class: 'tldr-box mb-4' }, [
+            h('p', { class: 'text-lead', text: node.definition.text }),
+            sourceReveal({ document: node.definition.documentTitle, page: node.definition.page, quote: node.definition.text }, `node-def-${node.id}`),
+          ])
+        : h('p', { class: 'text-muted mb-4', text: 'Mentioned in lecture slides.' }),
+
+      h('div', { class: 'ready-stats mb-4' }, [
+        h('div', { class: 'stat' }, [
+          h('b', { text: `${(node.performance && node.performance.correct) || 0}/${(node.performance && node.performance.total) || 0}` }),
+          h('span', { text: 'Correct Answers' }),
+        ]),
+      ]),
+
+
+      h('div', { class: 'row-gap flex-column' }, [
+        h('button', {
+          class: 'btn full-btn',
+          text: '⚡ Ask Groundwork about this concept',
+          onClick: () => openTutorDrawer({ conceptId: node.id, query: node.name, subjectId }),
+        }),
+        h('button', {
+          class: 'btn secondary full-btn',
+          text: '🎯 Practice this topic',
+          onClick: async () => {
+            const quiz = await api('POST', '/api/quizzes/targeted', { subjectId, conceptIds: [node.id] });
+            location.hash = `#/quizzes/${quiz.id}`;
+          },
+        }),
+        h('a', { href: `#/concepts/${node.id}`, class: 'btn ghost text-center', text: 'View full concept details →' }),
+      ]),
+    ]);
+  }
+
   route();
+
 })();

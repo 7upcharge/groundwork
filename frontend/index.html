@@ -3,11 +3,32 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Groundwork</title>
+  <title>Groundwork — Your lecture, organized</title>
+  <meta name="description" content="Upload a lecture PDF. Groundwork turns it into revision notes and a practice quiz, with every claim traceable back to the exact page it came from." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
+  <aside class="sidebar" id="sidebar" hidden>
+    <a href="#/" class="sb-brand">
+      <span class="sb-icon">◆</span>
+      <span class="sb-brand-text">Groundwork</span>
+    </a>
+    <nav class="sb-nav" id="sidebar-nav"></nav>
+    <div class="sb-footer">
+      <button class="sb-toggle" id="theme-toggle" title="Toggle theme">
+        <span class="sb-icon" id="theme-icon">🌙</span>
+        <span class="sb-label" id="theme-label">Dark mode</span>
+      </button>
+      <button class="sb-toggle" id="sidebar-toggle" title="Collapse sidebar">
+        <span class="sb-icon">◁</span>
+        <span class="sb-label">Collapse</span>
+      </button>
+    </div>
+  </aside>
   <div class="app-shell">
     <header class="topnav" id="topnav" hidden>
       <a href="#/" class="brand" style="text-decoration:none">Groundwork</a>
@@ -15,7 +36,7 @@
       <div class="user" id="user-box"></div>
     </header>
     <main id="main" class="main" tabindex="-1"></main>
-    <footer class="footer">Groundwork — your lecture, organized.</footer>
+    <footer class="footer">Groundwork — source-grounded study workspace</footer>
   </div>
   <script src="app.js"></script>
 </body>
