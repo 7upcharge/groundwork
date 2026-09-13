@@ -9,6 +9,12 @@ function loadPdfjs() {
   if (!pdfjsPromise) {
     pdfjsPromise = (async () => {
       try {
+        require('pdfjs-dist/legacy/build/pdf.worker.mjs');
+      } catch {
+        /* ignore */
+      }
+
+      try {
         return require('pdfjs-dist/legacy/build/pdf.mjs');
       } catch {
         return import('pdfjs-dist/legacy/build/pdf.mjs');
