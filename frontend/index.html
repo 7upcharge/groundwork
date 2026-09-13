@@ -3,120 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Groundwork — grounded revision notes and quizzes</title>
+  <title>Groundwork</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-
-  <header class="site-header">
-    <div class="wrap">
-      <span class="logo">Groundwork</span>
-      <span class="tagline">notes and quizzes, traceable back to your lecture</span>
-    </div>
-  </header>
-
-  <main id="main" class="wrap">
-
-    <!-- Landing / empty state -->
-    <section id="landing" class="stage">
-      <h1>Turn a lecture PDF into revision notes and a quiz you can trust.</h1>
-      <p class="lede">
-        Upload a lecture PDF. Groundwork extracts the key ideas, builds a practice quiz from them,
-        and shows you the exact source sentence behind every answer — so you know it isn't guessing.
-      </p>
-
-      <form id="upload-form" aria-describedby="upload-hint">
-        <label for="file-input" class="dropzone" id="dropzone">
-          <input type="file" id="file-input" name="file" accept="application/pdf" required />
-          <span class="dropzone-icon" aria-hidden="true">&#128196;</span>
-          <span class="dropzone-text">
-            <strong>Drop your lecture PDF here</strong>
-            <span>or click to browse — max 10MB</span>
-          </span>
-          <span id="file-name" class="file-name" aria-live="polite"></span>
-        </label>
-        <p id="upload-hint" class="hint">Text-based PDFs only (scanned/image-only PDFs can't be read yet).</p>
-
-        <div class="field-row">
-          <label for="subject-select">Subject</label>
-          <select id="subject-select" name="subject">
-            <option value="general">General</option>
-            <option value="stem">STEM / Technical</option>
-            <option value="humanities">Humanities / History</option>
-            <option value="language">Language / Literature</option>
-          </select>
-        </div>
-
-        <div class="action-row">
-          <button type="submit" id="submit-btn" class="primary-btn">Generate notes &amp; quiz</button>
-          <button type="button" id="sample-btn" class="link-btn">No PDF handy? Try a sample lecture</button>
-        </div>
-      </form>
-
-      <p id="form-error" class="error-text" role="alert" hidden></p>
-    </section>
-
-    <!-- Processing state -->
-    <section id="processing" class="stage hidden" aria-live="polite">
-      <h2>Working on it&hellip;</h2>
-      <ol class="pipeline-steps" id="pipeline-steps">
-        <li data-step="extract">Extracting text from your PDF</li>
-        <li data-step="understand">Finding key concepts &amp; definitions</li>
-        <li data-step="notes">Building revision notes</li>
-        <li data-step="quiz">Generating a grounded practice quiz</li>
-        <li data-step="verify">Checking every answer against your source</li>
-      </ol>
-    </section>
-
-    <!-- Results -->
-    <section id="results" class="stage hidden">
-      <div class="results-header">
-        <h2 id="results-title">Your revision kit</h2>
-        <p id="engine-note" class="engine-note"></p>
-        <ul id="notices" class="notices" hidden></ul>
-        <div class="tabs" role="tablist" aria-label="Result views">
-          <button role="tab" id="tab-notes" aria-controls="panel-notes" aria-selected="true" class="tab active">Notes</button>
-          <button role="tab" id="tab-quiz" aria-controls="panel-quiz" aria-selected="false" class="tab">Quiz</button>
-        </div>
-      </div>
-
-      <div id="panel-notes" role="tabpanel" aria-labelledby="tab-notes">
-        <div class="card">
-          <h3>TL;DR</h3>
-          <ul id="tldr-list" class="bullet-list"></ul>
-        </div>
-
-        <div id="sections-container"></div>
-
-        <div class="card">
-          <h3>Key Terms</h3>
-          <ul id="glossary-list" class="glossary-list"></ul>
-        </div>
-
-        <div class="export-row">
-          <button id="export-md" class="secondary-btn">Download notes (Markdown)</button>
-          <button id="export-csv" class="secondary-btn">Download quiz (Anki CSV)</button>
-        </div>
-      </div>
-
-      <div id="panel-quiz" role="tabpanel" aria-labelledby="tab-quiz" hidden>
-        <form id="quiz-form"></form>
-        <div class="quiz-actions">
-          <button type="submit" form="quiz-form" id="quiz-submit" class="primary-btn">Check my answers</button>
-          <p id="quiz-score" aria-live="polite" class="quiz-score"></p>
-        </div>
-      </div>
-
-      <button id="start-over" class="link-btn">&larr; Start over with another PDF</button>
-    </section>
-
-  </main>
-
-  <footer class="site-footer">
-    <div class="wrap">Groundwork &mdash; built for students, grounded in your own material.</div>
-  </footer>
-
+  <div class="app-shell">
+    <header class="topnav" id="topnav" hidden>
+      <a href="#/" class="brand" style="text-decoration:none">Groundwork</a>
+      <nav id="primary-nav" aria-label="Primary"></nav>
+      <div class="user" id="user-box"></div>
+    </header>
+    <main id="main" class="main" tabindex="-1"></main>
+    <footer class="footer">Groundwork — your lecture, organized.</footer>
+  </div>
   <script src="app.js"></script>
 </body>
 </html>

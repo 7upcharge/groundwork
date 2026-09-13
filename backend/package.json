@@ -1,7 +1,7 @@
 {
   "name": "groundwork",
   "version": "1.0.0",
-  "description": "Turns a lecture PDF into source-grounded revision notes and a practice quiz.",
+  "description": "A source-grounded study workspace: upload a lecture PDF and get revision notes, a practice quiz, and a knowledge graph that finds and targets your weak concepts.",
   "main": "server.js",
   "type": "commonjs",
   "private": true,
@@ -10,12 +10,11 @@
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
-    "test": "node test/nlp.test.js",
+    "test": "node test/run.js",
     "samples": "node scripts/make-sample-pdfs.js"
   },
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.125.0",
     "express": "^4.19.2",
     "multer": "^2.3.0",
     "pdfjs-dist": "^6.3.289"
